@@ -96,7 +96,7 @@ router.get('/LoanApplications/:partnerId/active', async function (req, res, next
         return res.send("NO PARAMS PASSED")
     if (!req.params.partnerId)
         return res.send("No partner id provided")
-    await callGetPartnerActiveLoans(req, res, req.params.partnerId, false);
+    await callGetPartnerCustomers(req, res, req.params.partnerId, false);
 });
 
 /* Requests a Dradown */
@@ -244,7 +244,7 @@ async function callGetPartnerActiveLoans(req, res, partnerId, retryToken = false
         if (err.statusCode == 401 && retryToken == false) {
             // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
             clearTokenFromCache();
-            return callGetPartnerActiveLoans(req, res, partnerCustomerId, true);
+            return callGetPartnerActiveLoans(req, res, partnerId, true);
         } else {
             res.status(err.statusCode).json(err.data.error);
         }
