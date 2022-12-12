@@ -244,7 +244,7 @@ async function callGetPartnerActiveLoans(req, res, partnerId, retryToken = false
         if (err.statusCode == 401 && retryToken == false) {
             // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
             clearTokenFromCache();
-            return callGetPartnerActivecLoans(req, res, partnerCustomerId, true);
+            return callGetPartnerActiveLoans(req, res, partnerCustomerId, true);
         } else {
             res.status(err.statusCode).json(err.data.error);
         }
