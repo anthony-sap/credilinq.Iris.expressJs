@@ -53,92 +53,93 @@ router.get('/', function (req, res, next) {
     res.sendFile(path.join(__dirname + '/../views/html/index.html'));
 });
 
-/*
-router.get('/customerById/:partnerCustomerId', function (req, res, next) {
+/* Gets the Customers for a Partner */
+router.get('/customers/partner', async function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    await callGetPartnerCustomers(req, res, false);
+});
 
+/* Gets Customer by PartnerCustomerId */
+router.get('/customers/partnerCustomerId/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     if (!req.params)
         return res.send("NO PARAMS PASSED")
     if (!req.params.partnerCustomerId)
         return res.send("NO partner customer id provided")
-
-    callGetPartnerCustomerById(req)
-
+    await callGetCustomerByPartnerCustomerId(req, res, req.params.partnerCustomerId, false);
 });
-function callGetPartnerCustomerById(req) {
-    //successful.return data back to frontend
-    getPartnerCustomerById(req.params.partnerCustomerId).then((response) => {
-        var partnerCustomerData = response.data;
-        if (partnerCustomerData == undefined || entitypersonData == null) {
-            res.jsonp({
-                status: "ERROR",
-                msg: "Partner Customer Id not found"
-            });
-        } else {
 
-            console.log("Entity-Person Data (JWE):".green);
-            console.log(partnerCustomerData);
+/* Gets the customers Dashboard */
+router.get('/customerDashboard/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided")
+    await callgetCustomerDashboard(req, res, req.params.partnerCustomerId, false);
+});
 
-            response.jsonp(partnerCustomerData);
-        } // end else
-    }).catch(err => {
-        console.log(err);
-        console.log("Error from Entity-Person API:".red);
-        console.log(err.statusCode);
-        console.log(err.data.error);
-        res.json({
-            status: "ERROR",
-            data: err
-        });
-    })
-    // t2step5 END PASTE CODE
-}
-// function to prepare request and call Get Partner Customer By Id
-function getPartnerCustomerById(partnerCustomerId) {
-    var validToken = getAccessToken();
-    var url = _apiUrl + "/" + "lms/v1/Customers/partnerCustomerId/";
-    var cacheCtl = "no-cache";
-    var method = "GET";
+/* Gets Loans for a Customer */
+router.get('/customers/partnerCustomerId/:partnerCustomerId/drawdownrequests', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided")
+    await callGetCustomerLoans(req, res, req.params.partnerCustomerId, false);
+});
 
-    var strParams = "partnerCustomerId=" + partnerCustomerId;
+/* Gets Acitve Loans for partner */
+router.get('/LoanApplications/:partnerId/active', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.params.partnerId)
+        return res.send("No partner id provided")
+    await callGetPartnerActiveLoans(req, res, req.params.partnerId, false);
+});
 
-    // assemble headers for Entity-Person API
-    var strHeaders = "Cache-Control=" + cacheCtl;
-    var headers = querystring.parse(strHeaders);
-    var authHeaders;
+/* Requests a Dradown */
+router.post('/loan-drawdown/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    console.log(req.body);
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.body)
+        return res.send("NO body")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided");
+    await callLoanDrawdown(req, res, req.params.partnerCustomerId, req.body, false);
+});
 
-    // Sign request and add Authorization Headers
-    // t3step2b PASTE CODE BELOW
-    authHeaders = securityHelper.generateAuthorizationHeader(
-        url,
-        strParams,
-        method,
-        "", // no content type needed for GET
-        _authLevel,
-        _clientId,
-        _privateKeyContent,
-        _clientSecret
-    );
+/* Records a Disbursal */
+router.post('/loan-disburse/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    console.log(req.body);
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.body)
+        return res.send("NO body")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided");
+    await callLoanDisburse(req, res, req.params.partnerCustomerId, req.body, false);
+});
 
-    // t3step2b END PASTE CODE
-    if (!_.isEmpty(authHeaders)) {
-        _.set(headers, "Authorization", authHeaders + ",Bearer " + validToken);
-    } else {
-        // NOTE: include access token in Authorization header as "Bearer " (with space behind)
-        _.set(headers, "Authorization", "Bearer " + validToken);
-    }
-
-    var parsedPersonUrl = new URL(url);
-
-    var partnerCustomerApiResponse = requestHandler.getHttpsResponse(parsedPersonUrl.hostname, parsedPersonUrl.pathname + "?" + strParams, headers, method, null);
-    return partnerCustomerApiResponse;
-}
-
-*/
+/* Records a Repayment */
+router.post('/loan-repay/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    console.log(req.body);
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.body)
+        return res.send("NO body")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided");
+    await callLoanRepay(req, res, req.params.partnerCustomerId, req.body, false);
+});
 
 
 async function callGetPartnerCustomers(req, res, retryToken = false) {
-    // **** CALL Get Partner Customers ****
     accessToken = await getAccessToken();
     var decoded = JWT(accessToken);
     if (decoded == null || decoded == undefined || !('http://credilinq.ai/claims/partnerid' in decoded))
@@ -169,15 +170,86 @@ async function callGetPartnerCustomers(req, res, retryToken = false) {
     });
 }
 
-// // function for frontend to call GetPartnerCustomers
-router.get('/customerDashboard/:partnerCustomerId', async function (req, res, next) {
-    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    if (!req.params)
-        return res.send("NO PARAMS PASSED")
-    if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided")
-    await callgetCustomerDashboard(req, res, req.params.partnerCustomerId, false);
-});
+async function callGetCustomerByPartnerCustomerId(req, res, partnerCustomerId, retryToken = false) {
+    accessToken = await getAccessToken();
+
+    var url = _apiUrl + "/lms/v1/customers/partnerCustomerId/" + partnerCustomerId;
+    var strParams = "";
+    //return getPartnerCustomers(accessToken);
+    callCreditLinqAPi("GET", accessToken, url, strParams, null).then((response) => {
+        //var responseData = response.data;
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callGetCustomerByPartnerCustomerId(req, res, partnerCustomerId, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
+
+async function callGetCustomerLoans(req, res, partnerCustomerId, retryToken = false) {
+    accessToken = await getAccessToken();
+
+    var url = _apiUrl + "/lms/v1/customers/partnerCustomerId/" + partnerCustomerId + "/drawdownrequests";
+    var strParams = "";
+    //return getPartnerCustomers(accessToken);
+    callCreditLinqAPi("GET", accessToken, url, strParams, null).then((response) => {
+        //var responseData = response.data;
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callGetCustomerLoans(req, res, partnerCustomerId, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
+
+async function callGetPartnerActiveLoans(req, res, partnerId, retryToken = false) {
+    accessToken = await getAccessToken();
+
+    var url = _apiUrl + "/lms/v1/LoanApplications/" + partnerId + "/active";
+    var strParams = "";
+    //return getPartnerCustomers(accessToken);
+    callCreditLinqAPi("GET", accessToken, url, strParams, null).then((response) => {
+        //var responseData = response.data;
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callGetPartnerActivecLoans(req, res, partnerCustomerId, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
 
 async function callgetCustomerDashboard(req, res, partnerCustomerId, retryToken = false) {
     // **** CALL Get Partner dashboard ****
@@ -210,41 +282,7 @@ async function callgetCustomerDashboard(req, res, partnerCustomerId, retryToken 
     });
 }
 
-router.post('/loan-drawdown/:partnerCustomerId', async function (req, res, next) {
-    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log(req.body);
-    if (!req.params)
-        return res.send("NO PARAMS PASSED")
-    if (!req.body)
-        return res.send("NO body")
-    if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided");
-    await callLoanDrawdown(req, res, req.params.partnerCustomerId, req.body, false);
-});
-
-router.post('/loan-repay/:partnerCustomerId', async function (req, res, next) {
-    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log(req.body);
-    if (!req.params)
-        return res.send("NO PARAMS PASSED")
-    if (!req.body)
-        return res.send("NO body")
-    if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided");
-    await callLoanRepay(req, res, req.params.partnerCustomerId, req.body, false);
-});
-
-router.post('/loan-disburse/:partnerCustomerId', async function (req, res, next) {
-    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log(req.body);
-    if (!req.params)
-        return res.send("NO PARAMS PASSED")
-    if (!req.body)
-        return res.send("NO body")
-    if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided");
-    await callLoanDisburse(req, res, req.params.partnerCustomerId, req.body, false);
-});
+/* NOT TESTED*/
 async function callLoanDrawdown(req, res, partnerCustomerId, drawdown, retryToken = false) {
     // **** POST LOAN DRAWDOWN ****
     accessToken = await getAccessToken();
@@ -271,6 +309,7 @@ async function callLoanDrawdown(req, res, partnerCustomerId, drawdown, retryToke
     });
 }
 
+/* NOT TESTED*/
 async function callLoanRepay(req, res, partnerCustomerId, repay, retryToken = false) {
     // **** POST LOAN REPAY ****
     accessToken = await getAccessToken();
@@ -297,6 +336,7 @@ async function callLoanRepay(req, res, partnerCustomerId, repay, retryToken = fa
     });
 }
 
+/* NOT TESTED*/
 async function callLoanDisburse(req, res, partnerCustomerId, disburse, retryToken = false) {
     // **** POST LOAN Disburse ****
     accessToken = await getAccessToken();
