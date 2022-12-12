@@ -15,6 +15,7 @@ var fs = require('fs');
 const { get } = require('lodash');
 const cache = require('persistent-cache');
 const JWT = require('jwt-decode');
+const { red } = require('colors');
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
@@ -134,12 +135,6 @@ function getPartnerCustomerById(partnerCustomerId) {
 }
 
 */
-// // function for frontend to call GetPartnerCustomers
-router.get('/partnerCustomers', async function (req, res, next) {
-    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log('getting customer');
-    await callGetPartnerCustomers(req, res);
-});
 
 
 async function callGetPartnerCustomers(req, res, retryToken = false) {
@@ -153,7 +148,7 @@ async function callGetPartnerCustomers(req, res, retryToken = false) {
     var url = _apiUrl + "/lms/v1/customers/partner/" + partnerId;
     var strParams = "";
     //return getPartnerCustomers(accessToken);
-    callCreditLinqAPi(accessToken, url, strParams).then((response) => {
+    callCreditLinqAPi("GET", accessToken, url, strParams, null).then((response) => {
         //var responseData = response.data;
         if (response == undefined || response == null) {
             res.end();
@@ -192,7 +187,7 @@ async function callgetCustomerDashboard(req, res, partnerCustomerId, retryToken 
     var strParams = "";
     //return getPartnerCustomers(accessToken);
     console.log('calling');
-    callCreditLinqAPi(accessToken, url, strParams).then((response) => {
+    callCreditLinqAPi("GET", accessToken, url, strParams, null).then((response) => {
         //var responseData = response.data;
         console.log(response);
         if (response == undefined || response == null) {
@@ -215,13 +210,56 @@ async function callgetCustomerDashboard(req, res, partnerCustomerId, retryToken 
     });
 }
 
+router.post('/loan-drawdown/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    console.log(req.body);
+    if (!req.params )
+        return res.send("NO PARAMS PASSED")
+    if (!req.body  )
+        return res.send("NO body")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided")
+        postObject = {};
+        res.end('hello');
+    await callPostDrawdown(req, res, req.params.partnerCustomerId, req.body, false);
+});
 
+
+async function callPostDrawdown(req, res, partnerCustomerId, drawdown, retryToken = false) {
+    // **** CALL Get Partner dashboard ****
+    console.log("CALL Get Partner dashboard");
+    accessToken = await getAccessToken();
+    var url = _apiUrl + "/lms/v1/partner/Dashboard/" + partnerCustomerId;
+    var strParams = "";
+    //return getPartnerCustomers(accessToken);
+    console.log('calling');
+    callCreditLinqAPi("POST", accessToken, url, strParams, drawdown, null).then((response) => {
+        //var responseData = response.data;
+        console.log(response);
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        console.log(err);
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callPostDrawdown(req, res, partnerCustomerId, drawdown, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
 
 // function to prepare request and call 
-async function callCreditLinqAPi(validToken, url, strParams) {
+async function callCreditLinqAPi(method, validToken, url, strParams, body) {
     console.log('in the crediliqnapi method');
     var cacheCtl = "no-cache";
-    var method = "GET";
     // assemble params 
 
     var strParams = "";
@@ -235,7 +273,7 @@ async function callCreditLinqAPi(validToken, url, strParams) {
 
     var parsedUrl = new URL(url);
 
-    var apiResponse = requestHandler.getHttpsResponse(parsedUrl.hostname, parsedUrl.pathname + "?" + strParams, headers, method, null);
+    var apiResponse = requestHandler.getHttpsResponse(parsedUrl.hostname, parsedUrl.pathname + "?" + strParams, headers, method, body);
     return apiResponse;
 }
 
