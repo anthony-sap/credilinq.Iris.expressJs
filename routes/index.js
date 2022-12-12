@@ -213,29 +213,45 @@ async function callgetCustomerDashboard(req, res, partnerCustomerId, retryToken 
 router.post('/loan-drawdown/:partnerCustomerId', async function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     console.log(req.body);
-    if (!req.params )
+    if (!req.params)
         return res.send("NO PARAMS PASSED")
-    if (!req.body  )
+    if (!req.body)
         return res.send("NO body")
     if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided")
-        postObject = {};
-        res.end('hello');
-    await callPostDrawdown(req, res, req.params.partnerCustomerId, req.body, false);
+        return res.send("NO partner customer id provided");
+    await callLoanDrawdown(req, res, req.params.partnerCustomerId, req.body, false);
 });
 
+router.post('/loan-repay/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    console.log(req.body);
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.body)
+        return res.send("NO body")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided");
+    await callLoanRepay(req, res, req.params.partnerCustomerId, req.body, false);
+});
 
-async function callPostDrawdown(req, res, partnerCustomerId, drawdown, retryToken = false) {
-    // **** CALL Get Partner dashboard ****
-    console.log("CALL Get Partner dashboard");
+router.post('/loan-disburse/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    console.log(req.body);
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.body)
+        return res.send("NO body")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided");
+    await callLoanDisburse(req, res, req.params.partnerCustomerId, req.body, false);
+});
+async function callLoanDrawdown(req, res, partnerCustomerId, drawdown, retryToken = false) {
+    // **** POST LOAN DRAWDOWN ****
     accessToken = await getAccessToken();
-    var url = _apiUrl + "/lms/v1/partner/Dashboard/" + partnerCustomerId;
+    var url = _apiUrl + "/v1/customers/" + partnerCustomerId + "/drawdown";
     var strParams = "";
     //return getPartnerCustomers(accessToken);
-    console.log('calling');
     callCreditLinqAPi("POST", accessToken, url, strParams, drawdown, null).then((response) => {
-        //var responseData = response.data;
-        console.log(response);
         if (response == undefined || response == null) {
             res.end();
         } else {
@@ -243,13 +259,63 @@ async function callPostDrawdown(req, res, partnerCustomerId, drawdown, retryToke
             res.end(response);
         } // end else
     }).catch(err => {
-        console.log(err);
         // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
         // exit condition to prevent infinite recursion.s
         if (err.statusCode == 401 && retryToken == false) {
             // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
             clearTokenFromCache();
-            return callPostDrawdown(req, res, partnerCustomerId, drawdown, true);
+            return callLoanDrawdown(req, res, partnerCustomerId, drawdown, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
+
+async function callLoanRepay(req, res, partnerCustomerId, repay, retryToken = false) {
+    // **** POST LOAN REPAY ****
+    accessToken = await getAccessToken();
+    var url = _apiUrl + "/v1/customers/" + partnerCustomerId + "/repay";
+    var strParams = "";
+    //return getPartnerCustomers(accessToken);
+    callCreditLinqAPi("POST", accessToken, url, strParams, repay, null).then((response) => {
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            callLoanRepay();
+            return callLoanDrawdown(req, res, partnerCustomerId, drawdown, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
+
+async function callLoanDisburse(req, res, partnerCustomerId, disburse, retryToken = false) {
+    // **** POST LOAN Disburse ****
+    accessToken = await getAccessToken();
+    var url = _apiUrl + "/v1/customers/" + partnerCustomerId + "/disburse";
+    var strParams = "";
+    callCreditLinqAPi("POST", accessToken, url, strParams, disburse, null).then((response) => {
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callLoanDisburse(req, res, partnerCustomerId, drawdown, true);
         } else {
             res.status(err.statusCode).json(err.data.error);
         }
@@ -258,14 +324,13 @@ async function callPostDrawdown(req, res, partnerCustomerId, drawdown, retryToke
 
 // function to prepare request and call 
 async function callCreditLinqAPi(method, validToken, url, strParams, body) {
-    console.log('in the crediliqnapi method');
     var cacheCtl = "no-cache";
     // assemble params 
 
     var strParams = "";
 
     // assemble headers 
-    var strHeaders = "Cache-Control=" + cacheCtl;
+    var strHeaders = "Cache-Control=" + cacheCtl + "&Content-Type=application/json";
     var headers = querystring.parse(strHeaders);
 
     // NOTE: include access token in Authorization header as "Bearer " (with space behind)
@@ -277,9 +342,8 @@ async function callCreditLinqAPi(method, validToken, url, strParams, body) {
     return apiResponse;
 }
 
-/* ACCESS TOKEN AND CAhCE RELATED */
+/* ACCESS TOKEN AND CACHE RELATED */
 function getAccessToken() {
-    console.log('getAccessToken');
     return new Promise((resolve, reject) => {
         var _accessToken = null;
         var data = tokenCache.getSync('accessToken.cache');
