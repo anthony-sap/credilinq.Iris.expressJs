@@ -144,17 +144,20 @@ function getAccessToken() {
         var data = tokenCache.getSync('accessToken.cache');
         if (data != undefined || data != null) {
             _accessToken = data;
+            console.log('from cache');
             resolve(_accessToken);
         } else {
             var token = callTokenApi().then((response) => {
-                var data = JSON.parse(response.data);
+                console.log('from api');
+                console.log(response);
+                var data = JSON.parse(response);
                 var accessToken = data.access_token;
                 if (accessToken == undefined || accessToken == null) {
                     reject("ACCESS TOKEN NOT FOUND")
                 } else {
                     tokenCache.putSync('accessToken.cache', accessToken);
                 }
-                resolve(_accessToken);
+                resolve(accessToken);
             }).catch(err => {
                 return err;
             });
@@ -168,52 +171,35 @@ router.get('/partnerCustomers', async function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     console.log('getting customer');
     await callGetPartnerCustomers(req, res);
-    // console.log('response data');
-    // res.json(responseData);
-
-    // getAccessToken().then((response) => {
-    //     if (response == undefined || response == null) {
-    //         res.jsonp({
-    //             status: "ERROR",
-    //             msg: "ACCESS TOKEN NOT FOUND"
-    //         });
-    //     }
-    //     var accessToken = response;
-    //     // Call Get Partner Customers
-    //     await callGetPartnerCustomers(accessToken, res);
-
-    // }).catch(err => {
-    //     res.json({
-    //         status: "ERROR",
-    //         msg: err.msg
-    //     });
-    // });
 });
 
 
-async function callGetPartnerCustomers(req, res) {
+async function callGetPartnerCustomers(req, res, retryToken = false) {
     console.log('callGetPartnerCustomers customer');
     // **** CALL Get Partner Customers ****
     accessToken = await getAccessToken();
     //return getPartnerCustomers(accessToken);
     getPartnerCustomers(accessToken).then((response) => {
-        var responseData = response.data;
-        if (responseData == undefined || responseData == null) {
-            res.jsonp(response.data);
+        //var responseData = response.data;
+        if (response == undefined || response == null) {
+            res.end();
         } else {
-            res.json(responseData);
-
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
         } // end else
     }).catch(err => {
-        // if 401, try to flush the token and get it again.
-        res.send(err.statusCode);
-    })
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callGetPartnerCustomers(req, res, true);
+        } else { res.send(err.statusCode); }
+    });
 
 }
 // function to prepare request and call ENTITY-PERSON API
 async function getPartnerCustomers(validToken) {
-    console.log('getPartnerCustomers');
-
     var decoded = JWT(validToken);
     if (decoded == null || decoded == undefined || !('http://credilinq.ai/claims/partnerid' in decoded))
         return "error"
@@ -222,13 +208,12 @@ async function getPartnerCustomers(validToken) {
     var url = _apiUrl + "/lms/v1/customers/partner/" + partnerId;
     var cacheCtl = "no-cache";
     var method = "GET";
-    // assemble params for Entity-Person API
-    // t2step6 PASTE CODE BELOW
+    // assemble params 
 
     var strParams = "";//"partnerId=" + partnerId;
     var params = querystring.parse(strParams);
 
-    // assemble headers for Entity-Person API
+    // assemble headers 
     var strHeaders = "Cache-Control=" + cacheCtl;
     var headers = querystring.parse(strHeaders);
 
@@ -265,6 +250,11 @@ function callTokenApi() {
     var tokenApiResponse = requestHandler.getHttpsResponse(parsedTokenUrl.hostname, parsedTokenUrl.pathname, headers, method, params);
 
     return tokenApiResponse;
+}
+
+function clearTokenFromCache() {
+    console.log('clearing cache, setting null');
+    tokenCache.putSync('accessToken.cache', ' ');
 }
 
 module.exports = router;
