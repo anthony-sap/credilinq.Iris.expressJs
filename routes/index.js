@@ -33,15 +33,12 @@ var _publicCertContent = process.env.MYINFO_CONSENTPLATFORM_SIGNATURE_CERT_PUBLI
 // LOADED FRON ENV VARIABLE: your private key for RSA digital signature
 var _privateKeyContent = process.env.DEMO_APP_SIGNATURE_CERT_PRIVATE_KEY;
 
-// redirect URL for your web application
-var _redirectUrl = process.env.MYINFO_APP_REDIRECT_URL;
 
 // URLs for MyInfo APIs
 var _authLevel = process.env.AUTH_LEVEL;
 var _apiUrl = process.env.CREDILINQ_API;
 var _tokenApiUrl = process.env.CREDILINQ_TOKEN;
 var _tokenAudience = process.env.CREDILINQ_IRIS_API_AUDIENCE;
-// var _personApiUrl = process.env.MYINFOBIZ_API_PERSON;
 
 const tokenCache = cache({
     persist: true,
@@ -74,7 +71,7 @@ router.get('/customerById/:partnerCustomerId', function (req, res, next) {
 function callGetPartnerCustomerById(req) {
     //successful.return data back to frontend
     getPartnerCustomerById(req.params.partnerCustomerId).then((response) => {
-        var partnerCustomerData = response.msg;
+        var partnerCustomerData = response.data;
         if (partnerCustomerData == undefined || entitypersonData == null) {
             res.jsonp({
                 status: "ERROR",
@@ -91,10 +88,10 @@ function callGetPartnerCustomerById(req) {
         console.log(err);
         console.log("Error from Entity-Person API:".red);
         console.log(err.statusCode);
-        console.log(err.msg.error);
+        console.log(err.data.error);
         res.json({
             status: "ERROR",
-            msg: err
+            data: err
         });
     })
     // t2step5 END PASTE CODE
@@ -141,6 +138,7 @@ function getPartnerCustomerById(partnerCustomerId) {
 }
 
 function getAccessToken() {
+    console.log('getAccessToken');
     return new Promise((resolve, reject) => {
         var _accessToken = null;
         var data = tokenCache.getSync('accessToken.cache');
@@ -149,7 +147,7 @@ function getAccessToken() {
             resolve(_accessToken);
         } else {
             var token = callTokenApi().then((response) => {
-                var data = JSON.parse(response.msg);
+                var data = JSON.parse(response.data);
                 var accessToken = data.access_token;
                 if (accessToken == undefined || accessToken == null) {
                     reject("ACCESS TOKEN NOT FOUND")
@@ -166,64 +164,56 @@ function getAccessToken() {
 
 
 // // function for frontend to call backend
-router.get('/partnerCustomers', function (req, res, next) {
+router.get('/partnerCustomers', async function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    getAccessToken().then((response) => {
-        if (response == undefined || response == null) {
-            res.jsonp({
-                status: "ERROR",
-                msg: "ACCESS TOKEN NOT FOUND"
-            });
-        }
-        var accessToken = response;
-        // Call Get Partner Customers
-        callGetPartnerCustomers(accessToken, res);
+    console.log('getting customer');
+    await callGetPartnerCustomers(req, res);
+    // console.log('response data');
+    // res.json(responseData);
 
-    }).catch(err => {
-        console.log('in here-------------------');
-        console.log(err);
-        console.log("Error from Token API:".red);
-        console.log(err.statusCode);
-        console.log(err.msg);
-        // console.log(callErr.response.req.res.text);
-        res.json({
-            status: "ERROR",
-            msg: err.msg
-        });
-    });
+    // getAccessToken().then((response) => {
+    //     if (response == undefined || response == null) {
+    //         res.jsonp({
+    //             status: "ERROR",
+    //             msg: "ACCESS TOKEN NOT FOUND"
+    //         });
+    //     }
+    //     var accessToken = response;
+    //     // Call Get Partner Customers
+    //     await callGetPartnerCustomers(accessToken, res);
+
+    // }).catch(err => {
+    //     res.json({
+    //         status: "ERROR",
+    //         msg: err.msg
+    //     });
+    // });
 });
 
 
-function callGetPartnerCustomers(accessToken, res) {
+async function callGetPartnerCustomers(req, res) {
+    console.log('callGetPartnerCustomers customer');
     // **** CALL Get Partner Customers ****
-    // Call Entity-Person API using accessToken
+    accessToken = await getAccessToken();
+    //return getPartnerCustomers(accessToken);
     getPartnerCustomers(accessToken).then((response) => {
-        var entitypersonData = response.msg;
-        if (entitypersonData == undefined || entitypersonData == null) {
-            res.jsonp({
-                status: "ERROR",
-                msg: "ENTITY-PERSON DATA NOT FOUND"
-            });
+        var responseData = response.data;
+        if (responseData == undefined || responseData == null) {
+            res.jsonp(response.data);
         } else {
-            // console.log("Entity-Person Data (JWE):".green);
-            // console.log(entitypersonData);
-            res.json(entitypersonData);
-            //         res.jsonp({
-            //             status: "OK",
-            //             text: decodedEntityPersonData
-            //         });
-
+            res.json(responseData);
 
         } // end else
     }).catch(err => {
-        console.log(err);
-        // reject(err);
-        //res.status(err.statusCode).send(err.msg);
+        // if 401, try to flush the token and get it again.
+        res.send(err.statusCode);
     })
 
 }
 // function to prepare request and call ENTITY-PERSON API
-function getPartnerCustomers(validToken) {
+async function getPartnerCustomers(validToken) {
+    console.log('getPartnerCustomers');
+
     var decoded = JWT(validToken);
     if (decoded == null || decoded == undefined || !('http://credilinq.ai/claims/partnerid' in decoded))
         return "error"
@@ -241,35 +231,14 @@ function getPartnerCustomers(validToken) {
     // assemble headers for Entity-Person API
     var strHeaders = "Cache-Control=" + cacheCtl;
     var headers = querystring.parse(strHeaders);
-    var authHeaders;
 
-    // Sign request and add Authorization Headers
-    // t3step2b PASTE CODE BELOW
-    authHeaders = securityHelper.generateAuthorizationHeader(
-        url,
-        params,
-        method,
-        "", // no content type needed for GET
-        _authLevel,
-        _clientId,
-        _privateKeyContent,
-        _clientSecret
-    );
+    // NOTE: include access token in Authorization header as "Bearer " (with space behind)
+    _.set(headers, "Authorization", "Bearer " + validToken);
 
-    // t3step2b END PASTE CODE
-    if (!_.isEmpty(authHeaders)) {
-        _.set(headers, "Authorization", authHeaders + ",Bearer " + validToken);
-    } else {
-        // NOTE: include access token in Authorization header as "Bearer " (with space behind)
-        _.set(headers, "Authorization", "Bearer " + validToken);
-    }
+    var parsedUrl = new URL(url);
 
-
-    var parsedPersonUrl = new URL(url);
-
-    var entityPersonApiResponse = requestHandler.getHttpsResponse(parsedPersonUrl.hostname, parsedPersonUrl.pathname + "?" + strParams, headers, method, null);
-
-    return entityPersonApiResponse;
+    var apiResponse = requestHandler.getHttpsResponse(parsedUrl.hostname, parsedUrl.pathname + "?" + strParams, headers, method, null);
+    return apiResponse;
 }
 
 // function to prepare request and call TOKEN API
@@ -294,7 +263,6 @@ function callTokenApi() {
     var parsedTokenUrl = new URL(_tokenApiUrl);
 
     var tokenApiResponse = requestHandler.getHttpsResponse(parsedTokenUrl.hostname, parsedTokenUrl.pathname, headers, method, params);
-    // t2step3 END PASTE CODE
 
     return tokenApiResponse;
 }
