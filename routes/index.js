@@ -15,6 +15,7 @@ var fs = require('fs');
 const { get } = require('lodash');
 const cache = require('persistent-cache');
 const JWT = require('jwt-decode');
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 
@@ -51,12 +52,7 @@ router.get('/', function (req, res, next) {
     res.sendFile(path.join(__dirname + '/../views/html/index.html'));
 });
 
-
-router.get('/refresh', function (req, res, next) {
-    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.sendFile(path.join(__dirname + '/../views/html/index.html'));
-});
-
+/*
 router.get('/customerById/:partnerCustomerId', function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
@@ -137,19 +133,123 @@ function getPartnerCustomerById(partnerCustomerId) {
     return partnerCustomerApiResponse;
 }
 
+*/
+// // function for frontend to call GetPartnerCustomers
+router.get('/partnerCustomers', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    console.log('getting customer');
+    await callGetPartnerCustomers(req, res);
+});
+
+
+async function callGetPartnerCustomers(req, res, retryToken = false) {
+    // **** CALL Get Partner Customers ****
+    accessToken = await getAccessToken();
+    var decoded = JWT(accessToken);
+    if (decoded == null || decoded == undefined || !('http://credilinq.ai/claims/partnerid' in decoded))
+        return "error"
+    var partnerId = decoded['http://credilinq.ai/claims/partnerid'];
+
+    var url = _apiUrl + "/lms/v1/customers/partner/" + partnerId;
+    var strParams = "";
+    //return getPartnerCustomers(accessToken);
+    callCreditLinqAPi(accessToken, url, strParams).then((response) => {
+        //var responseData = response.data;
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callGetPartnerCustomers(req, res, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
+
+// // function for frontend to call GetPartnerCustomers
+router.get('/customerDashboard/:partnerCustomerId', async function (req, res, next) {
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (!req.params)
+        return res.send("NO PARAMS PASSED")
+    if (!req.params.partnerCustomerId)
+        return res.send("NO partner customer id provided")
+    await callgetCustomerDashboard(req, res, req.params.partnerCustomerId, false);
+});
+
+async function callgetCustomerDashboard(req, res, partnerCustomerId, retryToken = false) {
+    // **** CALL Get Partner dashboard ****
+    console.log("CALL Get Partner dashboard");
+    accessToken = await getAccessToken();
+    var url = _apiUrl + "/lms/v1/partner/Dashboard/" + partnerCustomerId;
+    var strParams = "";
+    //return getPartnerCustomers(accessToken);
+    console.log('calling');
+    callCreditLinqAPi(accessToken, url, strParams).then((response) => {
+        //var responseData = response.data;
+        console.log(response);
+        if (response == undefined || response == null) {
+            res.end();
+        } else {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(response);
+        } // end else
+    }).catch(err => {
+        console.log(err);
+        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
+        // exit condition to prevent infinite recursion.s
+        if (err.statusCode == 401 && retryToken == false) {
+            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
+            clearTokenFromCache();
+            return callgetCustomerDashboard(req, res, partnerCustomerId, true);
+        } else {
+            res.status(err.statusCode).json(err.data.error);
+        }
+    });
+}
+
+
+
+// function to prepare request and call 
+async function callCreditLinqAPi(validToken, url, strParams) {
+    console.log('in the crediliqnapi method');
+    var cacheCtl = "no-cache";
+    var method = "GET";
+    // assemble params 
+
+    var strParams = "";
+
+    // assemble headers 
+    var strHeaders = "Cache-Control=" + cacheCtl;
+    var headers = querystring.parse(strHeaders);
+
+    // NOTE: include access token in Authorization header as "Bearer " (with space behind)
+    _.set(headers, "Authorization", "Bearer " + validToken);
+
+    var parsedUrl = new URL(url);
+
+    var apiResponse = requestHandler.getHttpsResponse(parsedUrl.hostname, parsedUrl.pathname + "?" + strParams, headers, method, null);
+    return apiResponse;
+}
+
+/* ACCESS TOKEN AND CAhCE RELATED */
 function getAccessToken() {
     console.log('getAccessToken');
     return new Promise((resolve, reject) => {
         var _accessToken = null;
         var data = tokenCache.getSync('accessToken.cache');
-        if (data != undefined || data != null) {
+        if (data) {
             _accessToken = data;
-            console.log('from cache');
             resolve(_accessToken);
         } else {
             var token = callTokenApi().then((response) => {
-                console.log('from api');
-                console.log(response);
                 var data = JSON.parse(response);
                 var accessToken = data.access_token;
                 if (accessToken == undefined || accessToken == null) {
@@ -165,66 +265,6 @@ function getAccessToken() {
     });
 }
 
-
-// // function for frontend to call backend
-router.get('/partnerCustomers', async function (req, res, next) {
-    res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log('getting customer');
-    await callGetPartnerCustomers(req, res);
-});
-
-
-async function callGetPartnerCustomers(req, res, retryToken = false) {
-    console.log('callGetPartnerCustomers customer');
-    // **** CALL Get Partner Customers ****
-    accessToken = await getAccessToken();
-    //return getPartnerCustomers(accessToken);
-    getPartnerCustomers(accessToken).then((response) => {
-        //var responseData = response.data;
-        if (response == undefined || response == null) {
-            res.end();
-        } else {
-            res.setHeader('Content-Type', 'application/json')
-            res.end(response);
-        } // end else
-    }).catch(err => {
-        // if 401, try to flush the token and get it again only if we have a retryToken flag as false otherwise we're retrying it and only want to do it once, this is our
-        // exit condition to prevent infinite recursion.s
-        if (err.statusCode == 401 && retryToken == false) {
-            // clear the token cache so we can go and retrieve a new fresh one that will give us data back.
-            clearTokenFromCache();
-            return callGetPartnerCustomers(req, res, true);
-        } else { res.send(err.statusCode); }
-    });
-
-}
-// function to prepare request and call ENTITY-PERSON API
-async function getPartnerCustomers(validToken) {
-    var decoded = JWT(validToken);
-    if (decoded == null || decoded == undefined || !('http://credilinq.ai/claims/partnerid' in decoded))
-        return "error"
-    var partnerId = decoded['http://credilinq.ai/claims/partnerid'];
-
-    var url = _apiUrl + "/lms/v1/customers/partner/" + partnerId;
-    var cacheCtl = "no-cache";
-    var method = "GET";
-    // assemble params 
-
-    var strParams = "";//"partnerId=" + partnerId;
-    var params = querystring.parse(strParams);
-
-    // assemble headers 
-    var strHeaders = "Cache-Control=" + cacheCtl;
-    var headers = querystring.parse(strHeaders);
-
-    // NOTE: include access token in Authorization header as "Bearer " (with space behind)
-    _.set(headers, "Authorization", "Bearer " + validToken);
-
-    var parsedUrl = new URL(url);
-
-    var apiResponse = requestHandler.getHttpsResponse(parsedUrl.hostname, parsedUrl.pathname + "?" + strParams, headers, method, null);
-    return apiResponse;
-}
 
 // function to prepare request and call TOKEN API
 function callTokenApi() {
@@ -253,8 +293,8 @@ function callTokenApi() {
 }
 
 function clearTokenFromCache() {
-    console.log('clearing cache, setting null');
-    tokenCache.putSync('accessToken.cache', ' ');
+    console.log('clearing cache');
+    tokenCache.putSync('accessToken.cache', '');
 }
 
 module.exports = router;
