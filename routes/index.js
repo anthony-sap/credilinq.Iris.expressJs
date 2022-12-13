@@ -17,6 +17,7 @@ const cache = require('persistent-cache');
 const JWT = require('jwt-decode');
 const { red } = require('colors');
 
+var validators = require("../lib/validators");
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 
@@ -96,19 +97,19 @@ router.get('/LoanApplications/:partnerId/active', async function (req, res, next
         return res.send("NO PARAMS PASSED")
     if (!req.params.partnerId)
         return res.send("No partner id provided")
-    await callGetPartnerCustomers(req, res, req.params.partnerId, false);
+    await callGetPartnerActiveLoans(req, res, req.params.partnerId, false);
 });
 
-/* Requests a Dradown */
+/* Requests a Drawdown */
 router.post('/loan-drawdown/:partnerCustomerId', async function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log(req.body);
-    if (!req.params)
-        return res.send("NO PARAMS PASSED")
-    if (!req.body)
-        return res.send("NO body")
-    if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided");
+
+    // merge the body and params and validate if everything required is provided
+    var validationResult = validators.drawdownSchema.validate({ ...req.body, ...req.params });
+    if (validationResult.error && validationResult.error.details) {
+        res.json(validationResult.error.details);
+    }
+    // validation passed let's do our API Call
     await callLoanDrawdown(req, res, req.params.partnerCustomerId, req.body, false);
 });
 
@@ -304,6 +305,7 @@ async function callLoanDrawdown(req, res, partnerCustomerId, drawdown, retryToke
             clearTokenFromCache();
             return callLoanDrawdown(req, res, partnerCustomerId, drawdown, true);
         } else {
+            console.log(res);
             res.status(err.statusCode).json(err.data.error);
         }
     });
