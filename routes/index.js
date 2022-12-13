@@ -116,26 +116,22 @@ router.post('/loan-drawdown/:partnerCustomerId', async function (req, res, next)
 /* Records a Disbursal */
 router.post('/loan-disburse/:partnerCustomerId', async function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log(req.body);
-    if (!req.params)
-        return res.send("NO PARAMS PASSED")
-    if (!req.body)
-        return res.send("NO body")
-    if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided");
+     // merge the body and params and validate if everything required is provided
+     var validationResult = validators.disburseSchema.validate({ ...req.body, ...req.params });
+     if (validationResult.error && validationResult.error.details) {
+         res.json(validationResult.error.details);
+     }
     await callLoanDisburse(req, res, req.params.partnerCustomerId, req.body, false);
 });
 
 /* Records a Repayment */
 router.post('/loan-repay/:partnerCustomerId', async function (req, res, next) {
     res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-    console.log(req.body);
-    if (!req.params)
-        return res.send("NO PARAMS PASSED")
-    if (!req.body)
-        return res.send("NO body")
-    if (!req.params.partnerCustomerId)
-        return res.send("NO partner customer id provided");
+     // merge the body and params and validate if everything required is provided
+     var validationResult = validators.repaymentSchema.validate({ ...req.body, ...req.params });
+     if (validationResult.error && validationResult.error.details) {
+         res.json(validationResult.error.details);
+     }
     await callLoanRepay(req, res, req.params.partnerCustomerId, req.body, false);
 });
 
